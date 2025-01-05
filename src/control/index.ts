@@ -67,6 +67,8 @@ export default class Control {
   downCollide = true
   upCollide = false
   isJumping = false
+  isDiagonalSprintA = false
+  isDiagonalSprintD = false
 
   // double tap 'w' properties
   lastWPressTime: number = 0;
@@ -240,16 +242,26 @@ export default class Control {
       case 'a':
       case 'A':
         this.downKeys.a = true
+        if (this.downKeys.w) this.isDiagonalSprintA = true
         if (this.player.mode == Mode.sprinting) this.velocity.z = -this.player.speed * 0.7
         else this.velocity.z = -this.player.speed
         break
       case 'd':
       case 'D':
         this.downKeys.d = true
+        if (this.downKeys.w) this.isDiagonalSprintD = true
         if (this.player.mode == Mode.sprinting) this.velocity.z = this.player.speed * 0.7
         else this.velocity.z = this.player.speed
         break
       case ' ':
+        if (!this.downKeys.a && this.isDiagonalSprintA) {
+          this.velocity.z = 0;
+          this.isDiagonalSprintA = false
+        }
+        if (!this.downKeys.d && this.isDiagonalSprintD) {
+          this.velocity.z = 0;
+          this.isDiagonalSprintD = false
+        }
         if (this.player.mode === Mode.walking) {
           // jump
           if (!this.isJumping) {
@@ -358,7 +370,7 @@ export default class Control {
         }
         break
       case 'Control':
-        if (!this.frontCollide && this.player.mode == Mode.walking && this.velocity.x != 0) {
+        if (!this.frontCollide && this.player.mode == Mode.walking && this.velocity.x != 0 && this.downKeys.w) {
           this.player.setMode(Mode.sprinting)
           this.updateFOV(this.camera.fov + 20)
           this.camera.updateProjectionMatrix()
