@@ -243,14 +243,14 @@ export default class Control {
       case 'A':
         this.downKeys.a = true
         if (this.downKeys.w) this.isDiagonalSprintA = true
-        if (this.player.mode == Mode.sprinting) this.velocity.z = -this.player.speed * 0.7
+        if (this.player.mode == Mode.sprinting) this.velocity.z = -this.player.speed * 0.5
         else this.velocity.z = -this.player.speed
         break
       case 'd':
       case 'D':
         this.downKeys.d = true
         if (this.downKeys.w) this.isDiagonalSprintD = true
-        if (this.player.mode == Mode.sprinting) this.velocity.z = this.player.speed * 0.7
+        if (this.player.mode == Mode.sprinting) this.velocity.z = this.player.speed * 0.5
         else this.velocity.z = this.player.speed
         break
       case ' ':
