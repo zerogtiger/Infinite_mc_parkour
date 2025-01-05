@@ -68,12 +68,6 @@ export default class Control {
   upCollide = false
   isJumping = false
 
-  // friction + gravity
-  GRAVITY = 25;  // m/s² (per tick)
-  TERMINAL_VELOCITY = 50;  // blocks/tick (falling speed)
-  AIR_DRAG = 0.99;  // Horizontal air drag
-  GROUND_FRICTION = 0.91;
-
   // double tap 'w' properties
   lastWPressTime: number = 0;
   doubleTapThreshold: number = 300; // milliseconds
@@ -103,6 +97,9 @@ export default class Control {
   p2 = performance.now()
   raycaster: THREE.Raycaster
   far: number
+  walkBobbingAmount = 0.015; // How much the camera moves up and down while walking
+  walkBobbingSpeed = 3;  // Speed of the bobbing (higher values = faster bobbing)
+  bobbingTimer = 0;
 
   holdingBlock = BlockType.grass
   holdingBlocks = [
@@ -243,12 +240,14 @@ export default class Control {
       case 'a':
       case 'A':
         this.downKeys.a = true
-        this.velocity.z = -this.player.speed
+        if (this.player.mode == Mode.sprinting) this.velocity.z = -this.player.speed * 0.7
+        else this.velocity.z = -this.player.speed
         break
       case 'd':
       case 'D':
         this.downKeys.d = true
-        this.velocity.z = this.player.speed
+        if (this.player.mode == Mode.sprinting) this.velocity.z = this.player.speed * 0.7
+        else this.velocity.z = this.player.speed
         break
       case ' ':
         if (this.player.mode === Mode.walking) {
@@ -257,9 +256,13 @@ export default class Control {
             this.velocity.y = 8*0.9
             this.isJumping = true
             this.downCollide = false
+            this.velocity.x *= 0.9
+            this.velocity.z *= 0.9
             this.far = 0
             setTimeout(() => {
               this.far = this.player.body.height
+              this.velocity.x *= 1/0.9
+              this.velocity.z *= 1/0.9
             }, 300)
           }
         } else if (this.player.mode === Mode.sprinting) { // sprinting
@@ -386,27 +389,22 @@ export default class Control {
           this.updateFOV(Control.FOVS[this.fovInput])
         }
         this.downKeys.w = false
-        if (this.player.mode === Mode.sneaking)  this.decelerateX(0.05)
-        else this.decelerateX(0.17)
-          this.velocity.x = 0; this.velocity.x = 0
+        if (this.downKeys.a || this.downKeys.s || this.downKeys.d) this.decelerateX(0.1)
         break
       case 's':
       case 'S':
         this.downKeys.s = false
-        if (this.player.mode === Mode.sneaking)  this.decelerateX(0.05)
-        else this.decelerateX(0.17); this.velocity.x = 0
+        if (this.downKeys.a || this.downKeys.w || this.downKeys.d) this.decelerateX(0.1)
         break
       case 'a':
       case 'A':
         this.downKeys.a = false
-        if (this.player.mode === Mode.sneaking)  this.decelerateZ(0.05)
-        else this.decelerateZ(0.17); this.velocity.z = 0
+        if (this.downKeys.w || this.downKeys.s || this.downKeys.d) this.decelerateZ(0.1)
         break
       case 'd':
       case 'D':
         this.downKeys.d = false
-        if (this.player.mode === Mode.sneaking)  this.decelerateZ(0.05)
-        else this.decelerateZ(0.17); this.velocity.z = 0
+        if (this.downKeys.a || this.downKeys.s || this.downKeys.w) this.decelerateZ(0.1)
         break
       case ' ':
         this.jumpInterval && clearInterval(this.jumpInterval)
@@ -1061,23 +1059,41 @@ export default class Control {
   update = () => {
     this.p1 = performance.now()
     const delta = (this.p1 - this.p2) / 1000
+    const isWalking = this.downKeys.w || this.downKeys.a || this.downKeys.s || this.downKeys.d;
+    if (isWalking){
+      if (this.player.mode === Mode.sneaking) this.bobbingTimer += delta * this.walkBobbingSpeed * 0.4
+      else this.bobbingTimer += delta * (this.player.mode === Mode.sprinting ? this.walkBobbingSpeed * 1.2 : this.walkBobbingSpeed);
+      // Sprinting makes bobbing faster
 
-    const airDrag = 0.13;
+      // Calculate the bobbing movement (sinusoidal)
+      const bobbingOffset = Math.sin(this.bobbingTimer * Math.PI * 2) * this.walkBobbingAmount;
 
-    // Check if the player is airborne (not grounded)
-    const isAirborne = this.isJumping  // Simple check if the player is off the ground (adjust as needed)
-
-    // Apply air drag when the player is airborne (with delta time)
-    if (isAirborne && this.player.mode === Mode.walking) {
-      // Horizontal drag (applied to both x and z velocities)
-      if (Math.abs(this.velocity.x) > 0.01) {
-        this.velocity.x *= Math.pow(airDrag, delta);  // Apply air drag with delta time
-      }
-      if (Math.abs(this.velocity.z) > 0.01) {
-        this.velocity.z *= Math.pow(airDrag, delta);  // Apply air drag with delta time
-      }
+      // Apply the bobbing to the camera's y position
+      this.camera.position.y += bobbingOffset;
     }
 
+    const decayRate = 15; // Decay rate (smaller = slower deceleration)
+    const stopThreshold = 0.01; // Threshold to stop velocity when close to zero
+
+    if (!this.downKeys.w && !this.downKeys.a && !this.downKeys.s && !this.downKeys.d) {
+      // Apply exponential deceleration in x and z direction (horizontal movement)
+
+      // Exponential decay in x direction
+      if (this.frontCollide || this.backCollide) this.velocity.z = 0
+      if (this.rightCollide || this.leftCollide) this.velocity.x = 0
+      if (Math.abs(this.velocity.x) > stopThreshold) {
+        this.velocity.x *= Math.exp(-decayRate * delta);
+      } else {
+        this.velocity.x = 0; // Stop movement if close to zero
+      }
+
+      // Exponential decay in z direction
+      if (Math.abs(this.velocity.z) > stopThreshold) {
+        this.velocity.z *= Math.exp(-decayRate * delta);
+      } else {
+        this.velocity.z = 0; // Stop movement if close to zero
+      }
+    }
 
     if (
       // dev mode

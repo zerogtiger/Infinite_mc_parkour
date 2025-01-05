@@ -7,7 +7,7 @@ export enum Mode {
 }
 
 export enum Speed {
-  walking = 4.317,
+  walking = 4.3,
   sprinting = 5.612,
   sneaking = 1.295,
   flying = 21.78
